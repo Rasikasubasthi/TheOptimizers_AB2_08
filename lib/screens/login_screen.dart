@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../models/user.dart';
+import 'registration_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,9 +13,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
-  final _passwordController = TextEditingController();
   bool _otpSent = false;
-  bool _otpVerified = false;
 
   @override
   Widget build(BuildContext context) {
@@ -31,60 +31,64 @@ class _LoginScreenState extends State<LoginScreen> {
               decoration: const InputDecoration(
                 labelText: 'Phone Number',
                 hintText: '+1234567890',
+                prefixIcon: Icon(Icons.phone),
               ),
               keyboardType: TextInputType.phone,
-              enabled: !_otpVerified,
+              enabled: !_otpSent,
             ),
             const SizedBox(height: 16),
             if (!_otpSent)
-              ElevatedButton(
+              ElevatedButton.icon(
                 onPressed: () async {
-                  await AuthService().sendOTP(_phoneController.text);
-                  setState(() => _otpSent = true);
-                },
-                child: const Text('Send OTP'),
-              ),
-            if (_otpSent && !_otpVerified) ...[
-              TextField(
-                controller: _otpController,
-                decoration: const InputDecoration(labelText: 'Enter OTP'),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () async {
-                  final verified = await AuthService()
-                      .verifyOTP(_phoneController.text, _otpController.text);
-                  setState(() => _otpVerified = verified);
-                },
-                child: const Text('Verify OTP'),
-              ),
-            ],
-            if (_otpVerified) ...[
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password'),
-                obscureText: true,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () async {
-                  final user = await AuthService().login(
-                    _phoneController.text,
-                    _passwordController.text,
-                  );
-                  if (user != null) {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => user.userType == UserType.farmer
-                            ? const FarmerDashboard()
-                            : const ConsumerDashboard(),
-                      ),
+                  try {
+                    await AuthService().sendOTP(_phoneController.text);
+                    setState(() => _otpSent = true);
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
                     );
                   }
                 },
-                child: const Text('Login'),
+                icon: const Icon(Icons.send),
+                label: const Text('Send OTP'),
+              ),
+            if (_otpSent) ...[
+              TextField(
+                controller: _otpController,
+                decoration: const InputDecoration(
+                  labelText: 'Enter OTP',
+                  prefixIcon: Icon(Icons.lock),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final verified = await AuthService().verifyOTP(_otpController.text);
+                  if (verified) {
+                    final user = await AuthService().getCurrentUser();
+                    if (user != null) {
+                      // User exists, navigate to dashboard
+                      _navigateToDashboard(context, user);
+                    } else {
+                      // New user, navigate to registration
+                      if (mounted) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const RegistrationScreen(),
+                          ),
+                        );
+                      }
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Invalid OTP')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.login),
+                label: const Text('Verify & Login'),
               ),
             ],
           ],
@@ -93,11 +97,21 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _navigateToDashboard(BuildContext context, User user) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => user.userType == UserType.farmer
+            ? const FarmerDashboard()
+            : const ConsumerDashboard(),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _phoneController.dispose();
     _otpController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 } 

@@ -1,87 +1,105 @@
-import 'package:crypto/crypto.dart';
-import 'package:twilio_flutter/twilio_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'dart:convert';
-import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart' as firebase;
 import 'package:shared_preferences.dart';
 import '../models/user.dart';
+import 'database_service.dart';
 
 class AuthService {
-  late TwilioFlutter _twilioFlutter;
+  final firebase.FirebaseAuth _auth = firebase.FirebaseAuth.instance;
   static final AuthService _instance = AuthService._internal();
   
   factory AuthService() {
     return _instance;
   }
 
-  AuthService._internal() {
-    _twilioFlutter = TwilioFlutter(
-      accountSid: dotenv.env['TWILIO_ACCOUNT_SID'] ?? '',
-      authToken: dotenv.env['TWILIO_AUTH_TOKEN'] ?? '',
-      twilioNumber: dotenv.env['TWILIO_PHONE_NUMBER'] ?? '',
-    );
-  }
+  AuthService._internal();
 
-  String _generateOTP() {
-    return Random().nextInt(900000 + 100000).toString();
-  }
-
-  String _hashPassword(String password) {
-    final bytes = utf8.encode(password);
-    final hash = sha256.convert(bytes);
-    return hash.toString();
-  }
-
+  // Send OTP
   Future<void> sendOTP(String phoneNumber) async {
-    final otp = _generateOTP();
-    
-    // Save OTP to database with expiration
-    await DatabaseService()._connection.execute('''
-      INSERT INTO otp_verifications (id, phone, otp, expires_at)
-      VALUES (uuid_generate_v4(), @phone, @otp, NOW() + INTERVAL '5 minutes')
-    ''', substitutionValues: {
-      'phone': phoneNumber,
-      'otp': otp,
-    });
-
-    // Send OTP via Twilio
-    await _twilioFlutter.sendSMS(
-      toNumber: phoneNumber,
-      messageBody: 'Your OTP for Farmer Marketplace is: $otp',
+    await _auth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      verificationCompleted: (firebase.PhoneAuthCredential credential) async {
+        // Auto-verification handled here (Android only)
+        await _auth.signInWithCredential(credential);
+      },
+      verificationFailed: (firebase.FirebaseAuthException e) {
+        throw Exception('Verification Failed: ${e.message}');
+      },
+      codeSent: (String verificationId, int? resendToken) async {
+        // Store verificationId for later use
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('verificationId', verificationId);
+      },
+      codeAutoRetrievalTimeout: (String verificationId) {},
     );
   }
 
-  Future<bool> verifyOTP(String phoneNumber, String otp) async {
-    final results = await DatabaseService()._connection.query('''
-      UPDATE otp_verifications
-      SET verified = TRUE
-      WHERE phone = @phone 
-        AND otp = @otp 
-        AND expires_at > NOW()
-        AND verified = FALSE
-      RETURNING id
-    ''', substitutionValues: {
-      'phone': phoneNumber,
-      'otp': otp,
-    });
+  // Verify OTP
+  Future<bool> verifyOTP(String otp) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final verificationId = prefs.getString('verificationId');
+      
+      if (verificationId == null) return false;
 
-    return results.isNotEmpty;
+      final credential = firebase.PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: otp,
+      );
+
+      final userCredential = await _auth.signInWithCredential(credential);
+      return userCredential.user != null;
+    } catch (e) {
+      return false;
+    }
   }
 
-  Future<User?> login(String phoneNumber, String password) async {
-    final results = await DatabaseService()._connection.query('''
-      SELECT * FROM users WHERE phone = @phone AND password_hash = @hash
-    ''', substitutionValues: {
-      'phone': phoneNumber,
-      'hash': _hashPassword(password),
-    });
+  // Register user after phone verification
+  Future<User?> registerUser({
+    required String name,
+    required String phone,
+    required UserType userType,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final firebaseUser = _auth.currentUser;
+      if (firebaseUser == null) return null;
 
-    if (results.isEmpty) return null;
+      final user = User(
+        id: firebaseUser.uid,
+        name: name,
+        email: '', // Optional in this case
+        userType: userType,
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
+      );
 
-    final userData = results.first;
+      // Save user to PostgreSQL
+      await DatabaseService().saveUser(user);
+      return user;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Get current user
+  Future<User?> getCurrentUser() async {
+    try {
+      final firebaseUser = _auth.currentUser;
+      if (firebaseUser == null) return null;
+
+      return await DatabaseService().getUserById(firebaseUser.uid);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Sign out
+  Future<void> signOut() async {
+    await _auth.signOut();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('userId', userData[0]);
-    
-    return User.fromMap(Map<String, dynamic>.from(userData));
+    await prefs.clear();
   }
 } 
