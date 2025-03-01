@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'screens/home_screen.dart';
-import 'services/local_data_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'screens/login_screen.dart';
+import 'services/database_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load();
+  await DatabaseService().initialize();
+  
   runApp(
-    Provider<LocalDataService>(
-      create: (_) => LocalDataService(),
+    Provider<DatabaseService>(
+      create: (_) => DatabaseService(),
       child: const MyApp(),
     ),
   );
@@ -26,12 +31,8 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-        ),
       ),
-      home: const HomeScreen(),
+      home: const LoginScreen(),
     );
   }
 } 
