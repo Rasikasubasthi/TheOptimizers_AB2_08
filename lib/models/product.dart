@@ -1,8 +1,3 @@
-import 'package:json_annotation/json_annotation.dart';
-
-part 'product.g.dart';
-
-@JsonSerializable()
 class Product {
   final String id;
   final String farmerId;
@@ -30,8 +25,39 @@ class Product {
     required this.shelfLifeDays,
   });
 
-  factory Product.fromJson(Map<String, dynamic> json) => _$ProductFromJson(json);
-  Map<String, dynamic> toJson() => _$ProductToJson(this);
+  factory Product.fromMap(Map<String, dynamic> map) {
+    return Product(
+      id: map['id'],
+      farmerId: map['farmer_id'],
+      name: map['name'],
+      description: map['description'],
+      price: (map['price'] as num).toDouble(),
+      unit: map['unit'],
+      availableQuantity: map['available_quantity'],
+      category: map['category'],
+      images: List<String>.from(map['images'] ?? []),
+      harvestDate: map['harvest_date'] is DateTime 
+          ? map['harvest_date'] 
+          : DateTime.parse(map['harvest_date']),
+      shelfLifeDays: map['shelf_life_days'],
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'farmer_id': farmerId,
+      'name': name,
+      'description': description,
+      'price': price,
+      'unit': unit,
+      'available_quantity': availableQuantity,
+      'category': category,
+      'images': images,
+      'harvest_date': harvestDate.toIso8601String(),
+      'shelf_life_days': shelfLifeDays,
+    };
+  }
 
   bool get isAvailable => availableQuantity > 0;
   

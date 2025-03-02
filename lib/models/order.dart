@@ -1,7 +1,3 @@
-import 'package:json_annotation/json_annotation.dart';
-
-part 'order.g.dart';
-
 enum OrderStatus {
   pending,
   confirmed,
@@ -10,7 +6,6 @@ enum OrderStatus {
   cancelled
 }
 
-@JsonSerializable()
 class OrderItem {
   final String productId;
   final int quantity;
@@ -22,13 +17,25 @@ class OrderItem {
     required this.pricePerUnit,
   });
 
-  factory OrderItem.fromJson(Map<String, dynamic> json) => _$OrderItemFromJson(json);
-  Map<String, dynamic> toJson() => _$OrderItemToJson(this);
+  factory OrderItem.fromMap(Map<String, dynamic> map) {
+    return OrderItem(
+      productId: map['product_id'],
+      quantity: map['quantity'],
+      pricePerUnit: (map['price_per_unit'] as num).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'product_id': productId,
+      'quantity': quantity,
+      'price_per_unit': pricePerUnit,
+    };
+  }
 
   double get totalPrice => quantity * pricePerUnit;
 }
 
-@JsonSerializable()
 class Order {
   final String id;
   final String consumerId;
@@ -50,8 +57,37 @@ class Order {
     required this.totalAmount,
   });
 
-  factory Order.fromJson(Map<String, dynamic> json) => _$OrderFromJson(json);
-  Map<String, dynamic> toJson() => _$OrderToJson(this);
+  factory Order.fromMap(Map<String, dynamic> map) {
+    return Order(
+      id: map['id'],
+      consumerId: map['consumer_id'],
+      farmerId: map['farmer_id'],
+      items: (map['items'] as List? ?? [])
+          .map((item) => OrderItem.fromMap(item as Map<String, dynamic>))
+          .toList(),
+      orderDate: map['order_date'] is DateTime 
+          ? map['order_date'] 
+          : DateTime.parse(map['order_date']),
+      status: OrderStatus.values.firstWhere(
+        (e) => e.toString().split('.').last == map['status'],
+      ),
+      deliveryDistance: (map['delivery_distance'] as num).toDouble(),
+      totalAmount: (map['total_amount'] as num).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'consumer_id': consumerId,
+      'farmer_id': farmerId,
+      'items': items.map((item) => item.toMap()).toList(),
+      'order_date': orderDate.toIso8601String(),
+      'status': status.toString().split('.').last,
+      'delivery_distance': deliveryDistance,
+      'total_amount': totalAmount,
+    };
+  }
 
   bool get isBulkOrder {
     int totalQuantity = items.fold(0, (sum, item) => sum + item.quantity);
@@ -60,31 +96,23 @@ class Order {
 
   bool get isShortDistance => deliveryDistance <= 20; // Short distance is <= 20km
 
-  // Calculate priority score (higher score = higher priority)
   double calculatePriorityScore() {
     double score = 0;
     
-    // Base priority based on distance and order size
     if (isShortDistance) {
-      score += 100; // High priority for short distance
-      if (!isBulkOrder) {
-        score += 50; // Additional priority for small orders in short distance
-      }
+      score += 100;
+      if (!isBulkOrder) score += 50;
     } else {
-      score += 50; // Lower priority for long distance
-      if (isBulkOrder) {
-        score += 75; // Higher priority for bulk orders in long distance
-      }
+      score += 50;
+      if (isBulkOrder) score += 75;
     }
 
-    // Penalize small orders from long distances
     if (!isBulkOrder && !isShortDistance) {
       score -= 25;
     }
 
-    // Add time-based priority (older orders get higher priority)
     final hoursElapsed = DateTime.now().difference(orderDate).inHours;
-    score += hoursElapsed * 2; // Add 2 points per hour elapsed
+    score += hoursElapsed * 2;
 
     return score;
   }
