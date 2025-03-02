@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../models/user.dart';
-import 'registration_screen.dart';
+import '../lib/screens/registration_screen.dart'; // Add this import
+import 'farmer_dashboard.dart'; // Add this import
+import 'consumer_dashboard.dart'; // Add this import
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

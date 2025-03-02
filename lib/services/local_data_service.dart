@@ -28,7 +28,7 @@ class LocalDataService {
       
       final contents = await file.readAsString();
       final List<dynamic> jsonList = json.decode(contents);
-      return jsonList.map((json) => User.fromJson(json)).toList();
+      return jsonList.map((json) => User.fromMap(json)).toList();
     } catch (e) {
       print('Error reading users: $e');
       return [];
@@ -37,7 +37,7 @@ class LocalDataService {
 
   Future<void> saveUsers(List<User> users) async {
     final file = await _getFile(_usersFileName);
-    final jsonList = users.map((user) => user.toJson()).toList();
+    final jsonList = users.map((user) => user.toMap()).toList();
     await file.writeAsString(json.encode(jsonList));
   }
 
@@ -49,7 +49,7 @@ class LocalDataService {
       
       final contents = await file.readAsString();
       final List<dynamic> jsonList = json.decode(contents);
-      return jsonList.map((json) => Product.fromJson(json)).toList();
+      return jsonList.map((json) => Product.fromMap(json)).toList();
     } catch (e) {
       print('Error reading products: $e');
       return [];
@@ -58,7 +58,7 @@ class LocalDataService {
 
   Future<void> saveProducts(List<Product> products) async {
     final file = await _getFile(_productsFileName);
-    final jsonList = products.map((product) => product.toJson()).toList();
+    final jsonList = products.map((product) => product.toMap()).toList();
     await file.writeAsString(json.encode(jsonList));
   }
 
@@ -70,7 +70,7 @@ class LocalDataService {
       
       final contents = await file.readAsString();
       final List<dynamic> jsonList = json.decode(contents);
-      return jsonList.map((json) => Order.fromJson(json)).toList();
+      return jsonList.map((json) => Order.fromMap(json)).toList();
     } catch (e) {
       print('Error reading orders: $e');
       return [];
@@ -81,11 +81,11 @@ class LocalDataService {
     final file = await _getFile(_ordersFileName);
     // Sort orders by priority score before saving
     orders.sort((a, b) => b.calculatePriorityScore().compareTo(a.calculatePriorityScore()));
-    final jsonList = orders.map((order) => order.toJson()).toList();
+    final jsonList = orders.map((order) => order.toMap()).toList();
     await file.writeAsString(json.encode(jsonList));
   }
 
-  // Helper methods
+  // Helper methods remain the same
   Future<void> addOrder(Order order) async {
     final orders = await getOrders();
     orders.add(order);
@@ -125,4 +125,4 @@ class LocalDataService {
       await saveProducts(products);
     }
   }
-} 
+}
